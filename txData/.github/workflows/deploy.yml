@@ -1,0 +1,37 @@
+name: Deploy to FiveM Server
+
+on:
+  push:
+    branches:
+      - main
+      - develop   # developブランチでも動かす場合
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Deploy files to server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            echo "✅ サーバーに接続しました"
+            cd C:/fivem_server2
+            git pull origin main
+            echo "📂 最新ファイルを取得しました"
+
+      - name: Apply SQL files
+        run: |
+          for file in $(ls sql/*.sql 2>/dev/null || true); do
+            echo "▶️ 実行中: $file"
+            mysql -h ${{ secrets.MYSQL_HOST }} -P ${{ secrets.MYSQL_PORT }} \
+              -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASS }} \
+              ${{ secrets.MYSQL_DB }} < "$file"
+          done
