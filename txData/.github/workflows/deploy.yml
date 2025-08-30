@@ -2,9 +2,7 @@ name: Deploy to FiveM Server
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [ main, develop ]
 
 jobs:
   deploy:
@@ -14,11 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-<<<<<<< HEAD
-      - name: Deploy and apply SQL on server
-=======
-      - name: Deploy and apply SQL on server (Windows)
->>>>>>> d9467e7 (Add GitHub Actions workflow)
+      - name: Deploy and apply SQL on server (Windows via SSH)
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -26,49 +20,30 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
-<<<<<<< HEAD
-            echo "✅ サーバーに接続しました"
-            cd C:/fivem_server2
-            git reset --hard
-            git pull origin ${{ github.ref_name }}
-            echo "📂 最新ファイルを取得しました"
+            echo ===== CONNECTED =====
 
-            # SQLフォルダ内を全部実行
-            for %f in (sql\*.sql) do (
-              echo ▶️ 実行中: %f
-              mysql -h ${{ secrets.MYSQL_HOST }} -P ${{ secrets.MYSQL_PORT }} ^
-                -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASS }} ^
-                ${{ secrets.MYSQL_DB }} < %f
-            )
-=======
-            echo ✅ サーバーに接続
+            REM 1) 最新化（develop をそのまま反映）
             cd /d C:\fivem_server2
+            git fetch --all
+            git reset --hard origin/${{ github.ref_name }}
+            echo ✅ Pulled latest: ${{ github.ref_name }}
 
-            rem —— Gitを最新に
-            git reset --hard
-            git pull origin ${{ github.ref_name }}
-            echo 📂 最新ファイルを取得
+            REM 2) PowerShellで .sql を再帰実行
+            powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+              "$mysql = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe'; ^
+               if (-not (Test-Path $mysql)) { Write-Error 'mysql.exe not found'; exit 1 } ; ^
+               $sqlFiles = Get-ChildItem -Path 'C:\fivem_server2' -Recurse -Filter *.sql; ^
+               if ($sqlFiles.Count -eq 0) { Write-Host 'No .sql files found. Skip.'; exit 0 } ; ^
+               foreach ($f in $sqlFiles) { ^
+                 Write-Host ('▶️ Running: ' + $f.FullName); ^
+                 & $mysql -h $env:MYSQL_HOST -P $env:MYSQL_PORT -u $env:MYSQL_USER -p$env:MYSQL_PASS $env:MYSQL_DB < $f.FullName ^
+                 ; if ($LASTEXITCODE -ne 0) { Write-Error ('MySQL failed on ' + $f.FullName); exit 1 } ^
+               } ; ^
+               Write-Host '✅ All SQL applied.'"
 
-            rem —— MySQLクライアントのパス（環境に合わせて調整）
-            set "MYSQL_EXE=C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
-
-            rem —— SQLフォルダ（リポジトリ内の実パスに合わせる）
-            set "SQL_DIR=C:\fivem_server2\txData\QBCore_B210CC.base\resources\sql"
-
-            if not exist "%SQL_DIR%" (
-              echo ⚠️ SQL_DIR が見つかりません: %SQL_DIR%
-              exit /b 0
-            )
-
-            rem —— *.sql を全部実行
-            pushd "%SQL_DIR%"
-            for %%f in (*.sql) do (
-              echo ▶️ 実行中: %%f
-              "%MYSQL_EXE%" -h ${{ secrets.MYSQL_HOST }} -P ${{ secrets.MYSQL_PORT }} ^
-                -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASS }} ^
-                ${{ secrets.MYSQL_DB }} < "%%f"
-            )
-            popd
-
-            echo ✅ SQL 適用完了
->>>>>>> d9467e7 (Add GitHub Actions workflow)
+        env:
+          MYSQL_HOST: ${{ secrets.MYSQL_HOST }}
+          MYSQL_PORT: ${{ secrets.MYSQL_PORT }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASS: ${{ secrets.MYSQL_PASS }}
+          MYSQL_DB:   ${{ secrets.MYSQL_DB }}
