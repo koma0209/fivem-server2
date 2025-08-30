@@ -14,7 +14,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+<<<<<<< HEAD
       - name: Deploy and apply SQL on server (Windows)
+=======
+      - name: Deploy and apply SQL on server
+>>>>>>> 4e0755cb5f6a9f158be5ac6b7c95ca337db867c4
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -22,6 +26,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
+<<<<<<< HEAD
             echo ✅ サーバーに接続
             cd /d C:\fivem_server2
 
@@ -52,3 +57,18 @@ jobs:
             popd
 
             echo ✅ SQL 適用完了
+=======
+            echo "✅ サーバーに接続しました"
+            cd C:/fivem_server2
+            git reset --hard
+            git pull origin ${{ github.ref_name }}
+            echo "📂 最新ファイルを取得しました"
+
+            # SQLフォルダ内を全部実行
+            for %f in (sql\*.sql) do (
+              echo ▶️ 実行中: %f
+              mysql -h ${{ secrets.MYSQL_HOST }} -P ${{ secrets.MYSQL_PORT }} ^
+                -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASS }} ^
+                ${{ secrets.MYSQL_DB }} < %f
+            )
+>>>>>>> 4e0755cb5f6a9f158be5ac6b7c95ca337db867c4
