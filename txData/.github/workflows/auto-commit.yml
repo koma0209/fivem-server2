@@ -1,0 +1,24 @@
+name: Auto Commit and Push
+
+on:
+  push:
+    branches:
+      - develop   # developブランチで動くようにする
+
+jobs:
+  auto-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Auto Commit
+        run: |
+          git add .
+          git commit -m "Auto commit from GitHub Actions" || echo "No changes to commit"
+          git push origin develop
