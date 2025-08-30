@@ -14,7 +14,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+<<<<<<< HEAD
       - name: Deploy and apply SQL on server
+=======
+      - name: Deploy and apply SQL on server (Windows)
+>>>>>>> d9467e7 (Add GitHub Actions workflow)
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -22,6 +26,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
+<<<<<<< HEAD
             echo "✅ サーバーに接続しました"
             cd C:/fivem_server2
             git reset --hard
@@ -35,3 +40,35 @@ jobs:
                 -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASS }} ^
                 ${{ secrets.MYSQL_DB }} < %f
             )
+=======
+            echo ✅ サーバーに接続
+            cd /d C:\fivem_server2
+
+            rem —— Gitを最新に
+            git reset --hard
+            git pull origin ${{ github.ref_name }}
+            echo 📂 最新ファイルを取得
+
+            rem —— MySQLクライアントのパス（環境に合わせて調整）
+            set "MYSQL_EXE=C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
+
+            rem —— SQLフォルダ（リポジトリ内の実パスに合わせる）
+            set "SQL_DIR=C:\fivem_server2\txData\QBCore_B210CC.base\resources\sql"
+
+            if not exist "%SQL_DIR%" (
+              echo ⚠️ SQL_DIR が見つかりません: %SQL_DIR%
+              exit /b 0
+            )
+
+            rem —— *.sql を全部実行
+            pushd "%SQL_DIR%"
+            for %%f in (*.sql) do (
+              echo ▶️ 実行中: %%f
+              "%MYSQL_EXE%" -h ${{ secrets.MYSQL_HOST }} -P ${{ secrets.MYSQL_PORT }} ^
+                -u ${{ secrets.MYSQL_USER }} -p${{ secrets.MYSQL_PASS }} ^
+                ${{ secrets.MYSQL_DB }} < "%%f"
+            )
+            popd
+
+            echo ✅ SQL 適用完了
+>>>>>>> d9467e7 (Add GitHub Actions workflow)
