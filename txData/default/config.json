@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "general": {
+    "serverName": "DVNRPSERVER"
+  },
+  "server": {
+    "dataPath": "C:/fivem_server2/txData/QBCore_B210CC.base/"
+  },
+  "whitelist": {
+    "mode": "adminOnly"
+  }
+}

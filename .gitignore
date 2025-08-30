@@ -1,0 +1,29 @@
+# OS / エディタ
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.vscode-server/
+*.tmp
+
+# アーカイブなど
+*.7z
+*.zip
+*.rar
+
+# txAdmin の一時/ローカルデータ（必要なら）
+txData/monitor/db.sqlite
+txData/logs/
+txData/backups/
+
+# ビルド生成物・キャッシュ
+cache/
+cache/**
+
+# 秘密情報を含む実ファイルは除外（代わりに example を管理）
+server.cfg
+.env
+
+# nodeやpythonなど（もし使っていれば）
+node_modules/
+venv/
