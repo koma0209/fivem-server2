@@ -2,17 +2,19 @@ name: Deploy to FiveM Server
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout repository (for metadata only)
+        uses: actions/checkout@v4
 
-      - name: Deploy and apply SQL on Windows host
+      - name: Deploy via SSH (Windows PowerShell)
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -20,45 +22,62 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script_stop: true
+          command_timeout: 30m
           script: |
-            powershell -NoProfile -ExecutionPolicy Bypass -Command "
-              $root = 'C:\fivem_server2';
-              Set-Location $root;
+            powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "
+              Write-Host '✅ Connected. Starting deploy...';
 
-              # 最新反映
-              git reset --hard;
-              git pull origin '${{ github.ref_name }}';
+              # 1) 基本パス
+              $repoPath = 'C:\fivem_server2';
+              $sqlPath  = Join-Path $repoPath 'sql';
+              $mysqlExe = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe';
 
-              # Secrets をセッション環境変数へ
-              $env:MYSQL_HOST='${{ secrets.MYSQL_HOST }}';
-              $env:MYSQL_PORT='${{ secrets.MYSQL_PORT }}';
-              $env:MYSQL_USER='${{ secrets.MYSQL_USER }}';
-              $env:MYSQL_PASS='${{ secrets.MYSQL_PASS }}';
-              $env:MYSQL_DB='${{ secrets.MYSQL_DB }}';
-
-              # mysql クライアントの場所（入ってない/Path未設定対策）
-              $mysql = 'mysql';
-              $cands = @(
-                'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe',
-                'C:\Program Files\MySQL\MySQL Server 5.7\bin\mysql.exe',
-                'C:\xampp\mysql\bin\mysql.exe'
-              );
-              foreach($c in $cands){ if(Test-Path $c){ $mysql = $c; break } }
-
-              Write-Host '--- SQL scan start ---';
-              # リポジトリ配下すべてから *.sql を再帰で取得（名前順で実行）
-              $files = Get-ChildItem -Path $root -Recurse -Filter *.sql | Sort-Object FullName;
-              if(-not $files){ Write-Host 'No SQL files found.'; exit 0 }
-
-              foreach($f in $files){
-                Write-Host ('Running: ' + $f.FullName);
-                & $mysql `
-                  -h $env:MYSQL_HOST `
-                  -P $env:MYSQL_PORT `
-                  -u $env:MYSQL_USER `
-                  ('-p' + $env:MYSQL_PASS) `
-                  $env:MYSQL_DB < $f.FullName
-                if($LASTEXITCODE -ne 0){ throw 'MySQL apply failed: ' + $f.FullName }
+              # 2) Git リポジトリ確認 & Pull（ブランチは push されたものに追随）
+              if (-not (Test-Path (Join-Path $repoPath '.git'))) {
+                Write-Error 'C:\fivem_server2 が Git クローンではありません。.git が見つかりません。';
+                exit 1
               }
-              Write-Host '--- SQL apply done ---';
+              Set-Location $repoPath
+
+              git remote -v
+              git rev-parse --is-inside-work-tree
+
+              git fetch --all --prune
+              $branch = '${{ github.ref_name }}'
+              if (-not $branch) { $branch = 'develop' }
+
+              git checkout $branch
+              git reset --hard ('origin/' + $branch)
+              git submodule sync --recursive
+              git submodule update --init --recursive
+
+              Write-Host '📂 Pulled latest: ' (git rev-parse --short HEAD);
+
+              # 3) SQL 実行（ある場合のみ）
+              if (Test-Path $sqlPath) {
+                $files = Get-ChildItem $sqlPath -File -Filter *.sql -ErrorAction SilentlyContinue | Sort-Object Name
+                if ($files.Count -gt 0) {
+                  foreach ($f in $files) {
+                    Write-Host ('▶️ Applying SQL: ' + $f.FullName)
+                    & $mysqlExe -h 127.0.0.1 -P 3307 -u '${{ secrets.MYSQL_USER }}' -p'${{ secrets.MYSQL_PASS }}' '${{ secrets.MYSQL_DB }}' < $f.FullName
+                    if ($LASTEXITCODE -ne 0) {
+                      Write-Error ('SQL failed: ' + $f.Name)
+                      exit 1
+                    }
+                  }
+                  Write-Host '✅ SQL applied.'
+                } else {
+                  Write-Host 'ℹ️ No SQL files found. Skipping.'
+                }
+              } else {
+                Write-Host 'ℹ️ sql folder not found. Skipping SQL.'
+              }
+
+              # 4) （任意）txAdmin 再起動が必要ならプロセス再起動
+              #     すでに txAdmin から手動再起動しているなら下3行はコメントのままでOK。
+              # Write-Host '♻️ Restarting FXServer...'
+              # Get-Process FXServer -ErrorAction SilentlyContinue | Stop-Process -Force
+              # Start-Process -FilePath 'C:\fivem_server2\server\FXServer.exe' -ArgumentList '+set txAdminPort 40130' -WindowStyle Hidden
+
+              Write-Host '✅ Deploy finished.'
             "
