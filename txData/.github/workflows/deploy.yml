@@ -5,79 +5,55 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch: {}  # 手動実行も可
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository (for metadata only)
+      - name: Checkout repository (for Actions metadata only)
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH (Windows PowerShell)
+      - name: Deploy & Apply SQL on Windows host (PowerShell)
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
-          script_stop: true
-          command_timeout: 30m
           script: |
-            powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "
-              Write-Host '✅ Connected. Starting deploy...';
+            Write-Host "✅ Connected via SSH"
+            $repoPath = 'C:\fivem_server2'
+            $sqlDir   = Join-Path $repoPath 'sql'
+            $mysqlExe = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe'
 
-              # 1) 基本パス
-              $repoPath = 'C:\fivem_server2';
-              $sqlPath  = Join-Path $repoPath 'sql';
-              $mysqlExe = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe';
+            Set-Location $repoPath
 
-              # 2) Git リポジトリ確認 & Pull（ブランチは push されたものに追随）
-              if (-not (Test-Path (Join-Path $repoPath '.git'))) {
-                Write-Error 'C:\fivem_server2 が Git クローンではありません。.git が見つかりません。';
-                exit 1
-              }
-              Set-Location $repoPath
+            # ローカル変更でつっかえないよう必ず上書き
+            git reset --hard
+            git clean -fd
 
-              git remote -v
-              git rev-parse --is-inside-work-tree
+            # いま push されたブランチ名で pull
+            git pull origin "$env:GITHUB_REF_NAME"
+            Write-Host "📂 Pulled latest: $env:GITHUB_REF_NAME"
 
-              git fetch --all --prune
-              $branch = '${{ github.ref_name }}'
-              if (-not $branch) { $branch = 'develop' }
-
-              git checkout $branch
-              git reset --hard ('origin/' + $branch)
-              git submodule sync --recursive
-              git submodule update --init --recursive
-
-              Write-Host '📂 Pulled latest: ' (git rev-parse --short HEAD);
-
-              # 3) SQL 実行（ある場合のみ）
-              if (Test-Path $sqlPath) {
-                $files = Get-ChildItem $sqlPath -File -Filter *.sql -ErrorAction SilentlyContinue | Sort-Object Name
-                if ($files.Count -gt 0) {
-                  foreach ($f in $files) {
-                    Write-Host ('▶️ Applying SQL: ' + $f.FullName)
-                    & $mysqlExe -h 127.0.0.1 -P 3307 -u '${{ secrets.MYSQL_USER }}' -p'${{ secrets.MYSQL_PASS }}' '${{ secrets.MYSQL_DB }}' < $f.FullName
-                    if ($LASTEXITCODE -ne 0) {
-                      Write-Error ('SQL failed: ' + $f.Name)
-                      exit 1
-                    }
-                  }
-                  Write-Host '✅ SQL applied.'
-                } else {
-                  Write-Host 'ℹ️ No SQL files found. Skipping.'
+            # SQL 全実行（あれば）
+            if (Test-Path $mysqlExe -PathType Leaf -ErrorAction SilentlyContinue) {
+              if (Test-Path $sqlDir) {
+                Get-ChildItem $sqlDir -Filter *.sql -File | ForEach-Object {
+                  Write-Host "▶️ Apply SQL: $($_.FullName)"
+                  & "$mysqlExe" -h ${{ secrets.MYSQL_HOST }} -P ${{ secrets.MYSQL_PORT }} `
+                    -u ${{ secrets.MYSQL_USER }} -p"${{ secrets.MYSQL_PASS }}" `
+                    ${{ secrets.MYSQL_DB }} < $_.FullName
                 }
               } else {
-                Write-Host 'ℹ️ sql folder not found. Skipping SQL.'
+                Write-Host "ℹ️ No sql directory. Skipping SQL."
               }
+            } else {
+              Write-Host "⚠️ MySQL client not found. Skipping SQL."
+            }
 
-              # 4) （任意）txAdmin 再起動が必要ならプロセス再起動
-              #     すでに txAdmin から手動再起動しているなら下3行はコメントのままでOK。
-              # Write-Host '♻️ Restarting FXServer...'
-              # Get-Process FXServer -ErrorAction SilentlyContinue | Stop-Process -Force
-              # Start-Process -FilePath 'C:\fivem_server2\server\FXServer.exe' -ArgumentList '+set txAdminPort 40130' -WindowStyle Hidden
-
-              Write-Host '✅ Deploy finished.'
-            "
+            # （任意）FXServer再起動。txAdminの自動再起動運用なら不要。
+            # Get-Process FXServer -ErrorAction SilentlyContinue | Stop-Process -Force
+            # Start-Process -FilePath "$repoPath\server\FXServer.exe"
+            # Write-Host "🚀 FXServer restarted"
