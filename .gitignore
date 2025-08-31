@@ -29,3 +29,4 @@ node_modules/
 venv/
 txData/default/logs/
 txData/default/data/stats_*.json
+txData/admins.json
