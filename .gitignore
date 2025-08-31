@@ -27,3 +27,5 @@ server.cfg
 # nodeやpythonなど（もし使っていれば）
 node_modules/
 venv/
+txData/default/logs/
+txData/default/data/stats_*.json
